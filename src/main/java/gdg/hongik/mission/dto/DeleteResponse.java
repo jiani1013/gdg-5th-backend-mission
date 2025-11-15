@@ -12,6 +12,8 @@ public class DeleteResponse {
     @Schema(description = "삭제 후 남아있는 물품 목록")
     private List<RemainingItemDto> remainItems;
     //------------------------------------------------------------------
+    @Setter
+    @Getter
     @Schema(description = "삭제 후 남아있는 개별 물품 정보")
     public static class RemainingItemDto {
 
