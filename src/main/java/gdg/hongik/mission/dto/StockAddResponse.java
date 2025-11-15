@@ -1,7 +1,11 @@
 package gdg.hongik.mission.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.Getter;
+import lombok.Setter;
 
+@Getter
+@Setter
 @Schema(
         description = "재고 추가 최종 결과",
         example = """
@@ -18,8 +22,4 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public class StockAddResponse {
     @Schema(description = "재고 추가 후 물품 정보")
     private ProductDto item;
-
-    public StockAddResponse() {}
-    public ProductDto getItem() { return item; }
-    public void setItem(ProductDto item) { this.item = item; }
 }

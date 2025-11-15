@@ -2,7 +2,11 @@ package gdg.hongik.mission.dto;
 
 import java.util.List;
 import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.Getter;
+import lombok.Setter;
 
+@Getter
+@Setter
 @Schema(
         description = "최종 물품 구매 결과 (OUTPUT)",
         example = """
@@ -29,23 +33,4 @@ public class PurchaseResponse {
 
     @Schema(description = "물건별 소비 금액 목록")
     private List<PurchasedItemResponse> items;
-
-    public PurchaseResponse() {
-    }
-
-    public Integer getTotalCost() {
-        return totalCost;
-    }
-
-    public List<PurchasedItemResponse> getItems() {
-        return items;
-    }
-
-    public void setTotalCost(Integer totalCost) {
-        this.totalCost = totalCost;
-    }
-
-    public void setItems(List<PurchasedItemResponse> items) {
-        this.items = items;
-    }
 }

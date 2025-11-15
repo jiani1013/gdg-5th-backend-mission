@@ -1,7 +1,7 @@
 package gdg.hongik.mission.controller;
 
+import gdg.hongik.mission.service.ProductService;
 import gdg.hongik.mission.dto.*; // 모든 DTO를 import
-
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -9,12 +9,34 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
+// lombok?? 설정 다들 했는지
 
+
+
+ // 공통
+
+/**
+ * 쇼핑몰 재고 관련 API 요청을 처리하는 컨트롤러
+ * 재고 검색, 구매, 등록, 추가, 물품 삭제 기능을 제공한다
+ */
 @Tag(name = "쇼핑몰 API", description = "재고 검색, 구매, 등록, 추가, 물품삭제를 지원")
 @RestController
-@RequestMapping()
+@RequestMapping("/products")
 public class ProductController{
+    //--------------------------------------
     // 1. 재고검색, GET /product?name=string
+    // --------------------------------------
+    private final ProductService service;
+
+    public ProductController(ProductService service){
+        this.service = service;
+    }
+
+    /**
+     * 재고를 검색하는 매서드
+     * @param name 검색할 물건의 이름
+     * @return 메소드 정상 수행 성공시 상품반환
+     */
     @Operation( // 각 API에 대한 설명을 추가할 수 있음
             summary = "재고 검색",
             description = "이름 기준으로 물품 재고 검색",
@@ -32,17 +54,27 @@ public class ProductController{
     // GetMapping = 메소드위에 붙어서 메소드를 실행하는역할
     // Opration = 기능 설명 제공
     // parameter = 변수
-    @GetMapping("/products?=name=string")
+
+    @GetMapping
     public ProductDto searchStock(
             @Parameter(description = "검색할 물건의 이름", example = "apple")
-            @RequestParam String name) {
-        return new ProductDto();
+            @RequestParam String name
+    ){
+        return service.searchStock(name);
+
     }
 
 
+    //--------------------------------------
+    // 2. 재고구매 POST /products
+    //--------------------------------------
 
-// 2. 재고구매 POST /products
-@Operation(
+    /**
+     * 재고를 구매하는 메서드
+     * @param request 구매할 물품의 목록과 수량
+     * @return 구매하는 물품의 총금액, 이름, 구매개수, 해당물건의 총가격 반환
+     */
+    @Operation(
         summary = "재고구매",
         description = "물품을 구매하고 총 금액과 개별 사용 금액을 나타냄",
         requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody( // 💡 @RequestBody 어노테이션 사용
@@ -58,21 +90,25 @@ public class ProductController{
                         description = "구매 성공 및 결과 반환",
                         content = @Content(
                                 schema = @Schema(implementation = PurchaseResponse.class))
-                )
-        }
-)
-@PostMapping("/products")
-public PurchaseResponse buyItems(
-        @org.springframework.web.bind.annotation.RequestBody
-        PurchaseOrderRequest request
-) {
-    System.out.println("구매 요청 목록: " + request.getItems().size() + "개");
+                    )
+            }
+    )
+    @PostMapping
+    public PurchaseResponse buyItems(
+        @RequestBody PurchaseOrderRequest request
+    ) {
+        return service.buyItems(request);
+    }
 
-    return new PurchaseResponse();
-}
+    //--------------------------------------
+    // 3.재고등록 POST /products
+    //--------------------------------------
 
-// 3.재고등록 POST /products
-@Operation(
+    /**
+     * 재고를 등록하는 매서드
+     * @param request 등록할 재고물품의 이름, 가격, 수량
+     */
+    @Operation(
         summary = "새 물품 재고 등록",
         description = "새로운 물품의 이름, 가격, 초기 재고를 등록합니다.",
         requestBody = @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -87,21 +123,26 @@ public PurchaseResponse buyItems(
                         responseCode = "200",
                         description = "등록 성공 (응답 본문 없음)"
                 )
-        }
-)
-@PostMapping("/products/register")
-public void registerProduct(
-        @org.springframework.web.bind.annotation.RequestBody
-        ProductRegistrationRequest request
-) {
-    System.out.println("새 물품 등록 요청: " + request.getName() + ", 재고: " + request.getStock());
+            }
+    )
+    @PostMapping("/register")
+    public void registerProduct(
+        @RequestBody ProductRegistrationRequest request
+    ) {
+        service.registerProduct(request);
+    }
 
-    // 실제 등록 로직 수행
-    // 반환할 것이 없으므로 return 문은 생략하거나 명시적인 return; 사용
-}
+    //--------------------------------------
+    // 4. 재고 추가 PATCH /products/{id}
+    //--------------------------------------
 
-// 4. 재고 추가 PATCH /products/{id}
-@Operation(
+    /**
+     * 재고를 추가하는 매서드
+     * @param id 재고를 추가하고자 하는 물품의 id(고유코드)
+     * @param request 추가하기를 원하는 수량
+     * @return 재고를 추가한 물품의 id, 이름, 가격, 추가 후 총 재고수
+     */
+    @Operation(
         summary = "기존 물품 재고 추가",
         description = "특정 ID를 가진 물품의 재고를 지정된 수량만큼 늘립니다.",
         // URL 경로에 들어가는 파라미터 정의
@@ -123,27 +164,28 @@ public void registerProduct(
                         description = "재고 추가 성공 및 결과 반환",
                         content = @Content(
                                 schema = @Schema(implementation = StockAddResponse.class) // 응답 DTO 사용
-                        )
-                )
-        }
-)
-@PatchMapping("/products/{id}")
-public StockAddResponse addStock(
+                            )
+                    )
+            }
+    )
+    @PatchMapping("/{id}")
+    public StockAddResponse addStock(
         @PathVariable Integer id, // URL 경로에서 ID를 받음
-        @org.springframework.web.bind.annotation.RequestBody
-        StockAddRequest request // 요청 본문에서 추가 수량을 받음
-) {
-    System.out.println("ID " + id + " 물품에 재고 " + request.getAddStock() + " 추가 요청");
+        @RequestBody StockAddRequest request
+    ) {
+        return service.addStock(id, request);
+    }
 
-    ProductDto updatedItem = new ProductDto();
-    StockAddResponse response = new StockAddResponse();
-    response.setItem(updatedItem);
+    //--------------------------------------
+    // 5. 물품 삭제 (DELETE /prodcts)
+    //--------------------------------------
 
-    return response;
-}
-
-// 5. 물품 삭제 (DELETE /prodcts)
-@Operation(
+    /**
+     * 물품을 삭제하는 매서드
+     * @param request 삭제를 원하는 물품의 이름목록 (1개 이상일 수 있음)
+     * @return 남아있는 물품들의 id, 이름, 재고수 반환
+     */
+    @Operation(
         summary = "물품 삭제",
         description = "요청 본문의 이름 목록을 받아 해당 물품들을 시스템에서 삭제합니다.",
         // INPUT 정의
@@ -164,18 +206,12 @@ public StockAddResponse addStock(
                         )
                 )
         }
-)
-@DeleteMapping("/products")
-public DeleteResponse deleteProducts(
-        @org.springframework.web.bind.annotation.RequestBody
-        DeleteRequest request // 삭제 요청 DTO를 받음
-) {
-    System.out.println("삭제 요청된 물품 목록: " + request.getNames());
-
-    DeleteResponse response = new DeleteResponse();
-    // 남아있는 물품 목록을 조회하여 response에 설정
-
-    return response;
-}
+    )
+    @DeleteMapping
+    public DeleteResponse deleteProducts(
+        @RequestBody DeleteRequest request
+    ) {
+        return service.deleteProducts(request);
+    }
 
 }// 전체 닫는 괄호
