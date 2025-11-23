@@ -1,51 +1,58 @@
 package gdg.hongik.mission.service;
 
 import gdg.hongik.mission.dto.*;
+import gdg.hongik.mission.entity.Product;
+import gdg.hongik.mission.repository.ProductRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * controller에서 받은 요청을 처리하고 다시 돌려줍니다
  * 캡슐화
  */
-@Service
+@Service // 서비스 계층임을 스프링에 알려줌
+@Transactional // 클래스 전체에 트랜잭션을 적용함 -> 중간에 오류나면 다시 돌아옴
 public class ProductService {
 
-    // 메모리에 상품 저장 -> 임의의 값이 들어와도 작동하도록,,,<<
-    private final Map<String, ProductDto> products = new HashMap<>();
+    private final ProductRepository productRepository;
 
-    // 생성자 - 초기 데이터 설정
-    public ProductService() {
-        ProductDto apple = new ProductDto();
-        apple.setId(1);
-        apple.setName("apple");
-        apple.setPrice(1000);
-        apple.setStock(100);
-        products.put("apple", apple);
-
-        ProductDto banana = new ProductDto();
-        banana.setId(2);
-        banana.setName("banana");
-        banana.setPrice(2000);
-        banana.setStock(50);
-        products.put("banana", banana);
+    public ProductService(ProductRepository productRepository) {
+        this.productRepository = productRepository;
     }
+    // ProductRepository라는 의존성을 주입받음
+    // 그니까 Service는 Repository통해 DB에 접근할 수 있게됨
 
     /**
      * 상품명으로 재고 검색
      * @param name 검색할 상품의 이름
      * @return 검색된 상품의 정보, 없으면 null 반환
      */
+    @Transactional(readOnly = true)
+    // 찾는거니까 읽기만 데이터 변경없이 읽기만 하면됨
     public ProductDto searchStock(String name) {
+        // controller에서 이야기한 searchStock의 내부 구조 구현
         System.out.println("name: " + name);
 
-        // 실제라면 DB에서 상품 찾아서 반환
-        ProductDto product = products.get(name);
-        return product;
+        // DB에서 상품 찾아서 반환
+        Product product = productRepository.findByName(name).orElse(null);
+        // Repository의 메서드를 호출하는데 DB에서 name으로 상품을 검색
+        // 상품이 있으면 Product 객체를 반환, 없으면 null반환함
+
+        if (product == null) {
+            return null;
+        }
+
+        // Entity를 DTO로 변환
+        ProductDto productDto = new ProductDto();
+        productDto.setId(product.getId());
+        productDto.setName(product.getName());
+        productDto.setPrice(product.getPrice());
+        productDto.setStock(product.getStock());
+
+        return productDto;
     }
 
     /**
@@ -56,28 +63,48 @@ public class ProductService {
      */
     public PurchaseResponse buyItems(PurchaseOrderRequest request) {
         System.out.println("구매 요청 목록 크기: " + request.getItems().size() + "개");
+        // 몇가지의 물건을 구매할것인지
 
         // 응답 객체 생성
         PurchaseResponse response = new PurchaseResponse();
+        // 동적으로 일단 빈 응답 객체를 생성해서 나중에 결과를 담아서 controller한테 보냄
         List<PurchasedItemResponse> purchasedItems = new ArrayList<>();
+        // 동적으로 아이템들의 정보를 담을 리스트를 만듦 (상품명, 수량, 금액)
+
         int totalCost = 0;
 
         // 각 아이템별로 처리
         for (PurchaseOrderItem item : request.getItems()) {
-            // 상품 정보 가져오기 (미리 저장된 products에서)
-            ProductDto product = products.get(item.getName());
+            // 구매 요청 목록을 가져오는데 리스트에서 하나씩 꺼내서 item에 담음
+            Product product = productRepository.findByName(item.getName()).orElse(null);
+            // Repository통해서 DB에서 상품찾기
+
+            if (product == null) {
+                throw new RuntimeException("상품을 찾을 수 없습니다: " + item.getName());
+            }
+
+            // 재고 확인 및 차감
+            if (product.getStock() < item.getQuantity()) {
+                throw new RuntimeException("재고가 부족합니다: " + item.getName());
+                // 재고 부족하면 back
+            }
+            product.setStock(product.getStock() - item.getQuantity());
+            // product.getStock() = 현재 재고 가져오기
+            // getQuantity() = 구매할 수량
+            productRepository.save(product);
+            // product의 재고를 변경 후 저장
 
             // 개별 상품 비용 계산 (가격 × 수량)
             int itemCost = product.getPrice() * item.getQuantity();
 
             // 응답 아이템 생성
             PurchasedItemResponse purchaseItem = new PurchasedItemResponse();
-            purchaseItem.setName(item.getName());
-            purchaseItem.setQuantity(item.getQuantity());
-            purchaseItem.setCost(itemCost);
+            purchaseItem.setName(item.getName()); // 이름저장
+            purchaseItem.setQuantity(item.getQuantity()); // 구매수량설정
+            purchaseItem.setCost(itemCost); // 개별금액 설정
 
             // 리스트에 추가
-            purchasedItems.add(purchaseItem);
+            purchasedItems.add(purchaseItem); // 아까 만든 빈 리스트에 저장
             totalCost += itemCost;
         }
 
@@ -95,19 +122,26 @@ public class ProductService {
      * @param request 등록할 상품의 정보가 담긴 요청 객체
      */
     public void registerProduct(ProductRegistrationRequest request) {
-        // 🟢 실제 등록 로직 수행
         System.out.println("새 물품 등록 요청: "
                 + request.getName() + ", 가격: " + request.getPrice() + ", 재고: " + request.getStock());
 
+        // 중복 체크
+        if (productRepository.existsByName(request.getName())) {
+            // request.getName = 같은 이름의 상품이 이미 존재하는지 확인하기 위해서
+            throw new RuntimeException("이미 존재하는 상품입니다: " + request.getName());
+        }
+
         // 새 상품 객체 생성
-        ProductDto newProduct = new ProductDto();
-        newProduct.setId(products.size() + 1);  // 간단하게 ID 생성
+        Product newProduct = new Product();
+        // DB에 저장하기위해서 새로운 Entity객체 생성
+        // JPA에서는 Entity만 DB에 저장할 수 있음
         newProduct.setName(request.getName());
         newProduct.setPrice(request.getPrice());
         newProduct.setStock(request.getStock());
+        // id는 DB가 자동으로 생성
 
-        // products Map에 저장
-        products.put(newProduct.getName(), newProduct);
+        // DB에 저장
+        productRepository.save(newProduct);
     }
 
     /**
@@ -118,24 +152,33 @@ public class ProductService {
      * @return 재고 추가 후 업데이트된 상품 정보
      */
     public StockAddResponse addStock(Integer id, StockAddRequest request) {
-        // 🟢 실제 재고 추가 로직 수행
+        // id와 얼마나 추가할지를 받을 거임(입력파라미터)
         System.out.println("ID " + id + "번 물품에 재고 " + request.getAddStock() + " 추가 요청");
 
-        // ID로 상품 찾기
-        ProductDto product = null;
-        for (ProductDto p : products.values()) {
-            if (p.getId().equals(id)) {
-                product = p;
-                break;
-            }
+        // ID로 DB에서 상품 찾기
+        Product product = productRepository.findById(id).orElse(null);
+
+        if (product == null) {
+            throw new RuntimeException("상품을 찾을 수 없습니다. ID: " + id);
         }
 
-        // 재고 추가
+        // 재고 추가(상품이 존재한다면)
         product.setStock(product.getStock() + request.getAddStock());
+        // product -> 현재 DB에 존재하는 값, request -> 추가하고 싶은 수량 받아오기
+        productRepository.save(product);
+        // 변경된 Product 객체를 DB에 저장함
+
+        // Entity를 DTO로 변환
+        ProductDto productDto = new ProductDto();
+        // DTO객체를 생성 새로만들어서 위에서 만든 Entity값을 넣고 다시 클라이언트한테 반환해줌
+        productDto.setId(product.getId());
+        productDto.setName(product.getName());
+        productDto.setPrice(product.getPrice());
+        productDto.setStock(product.getStock());
 
         // 응답 생성
         StockAddResponse response = new StockAddResponse();
-        response.setItem(product);
+        response.setItem(productDto);
 
         return response;
     }
@@ -147,17 +190,21 @@ public class ProductService {
      * @return 삭제 후 남아있는 상품 목록
      */
     public DeleteResponse deleteProducts(DeleteRequest request) {
-        // 🟢 실제 삭제 로직 수행
         System.out.println("삭제 요청된 물품 목록: " + request.getNames());
 
-        // 요청된 이름들을 products Map에서 삭제
+        // 요청된 이름들을 DB에서 삭제
         for (String name : request.getNames()) {
-            products.remove(name);
+            Product product = productRepository.findByName(name).orElse(null);
+            if (product != null) {
+                productRepository.delete(product);
+            }
         }
 
-        // 삭제 후 남은 상품 목록 생성
+        // 삭제 후 남은 상품 목록 조회
+        List<Product> remainingProducts = productRepository.findAll();
         List<DeleteResponse.RemainingItemDto> remainingItems = new ArrayList<>();
-        for (ProductDto product : products.values()) {
+
+        for (Product product : remainingProducts) {
             DeleteResponse.RemainingItemDto item = new DeleteResponse.RemainingItemDto();
             item.setId(product.getId());
             item.setName(product.getName());
@@ -172,4 +219,3 @@ public class ProductService {
         return response;
     }
 }
-

@@ -9,7 +9,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.*;
-// lombok?? 설정 다들 했는지
 
 
 
@@ -31,6 +30,7 @@ public class ProductController{
     public ProductController(ProductService service){
         this.service = service;
     }
+    // 의존성 주입
 
     /**
      * 재고를 검색하는 매서드
@@ -57,10 +57,11 @@ public class ProductController{
 
     @GetMapping
     public ProductDto searchStock(
-            @Parameter(description = "검색할 물건의 이름", example = "apple")
+            @Parameter(description = "검색할 물건의 이름", example = "apple") // swagger용
             @RequestParam String name
     ){
         return service.searchStock(name);
+        // service계층에서 searchStock(name)호출
 
     }
 
@@ -96,8 +97,10 @@ public class ProductController{
     @PostMapping
     public PurchaseResponse buyItems(
         @RequestBody PurchaseOrderRequest request
+        // 요청 본분 Body의 Json을 객체로 받음
     ) {
         return service.buyItems(request);
+        // service 계층에서 구매과정을 처리함 -> 총 금액, 개별 금액 사용량 반환, 재고 차감
     }
 
     //--------------------------------------
@@ -125,7 +128,7 @@ public class ProductController{
                 )
             }
     )
-    @PostMapping("/register")
+    @PostMapping("/register") // 공통 URL외에 다르면 구분해줘야함
     public void registerProduct(
         @RequestBody ProductRegistrationRequest request
     ) {
@@ -168,10 +171,11 @@ public class ProductController{
                     )
             }
     )
-    @PatchMapping("/{id}")
+    @PatchMapping("/{id}") // id를 받아올거임
     public StockAddResponse addStock(
-        @PathVariable Integer id, // URL 경로에서 ID를 받음
+        @PathVariable Integer id, // URL 경로에서 ID를 받음 {id}자리에 들어오는 값!
         @RequestBody StockAddRequest request
+        // ex -> 요청 PATCH/produxt/1 + body{addStock:50} 2개를 같이 처리할거임
     ) {
         return service.addStock(id, request);
     }
@@ -210,6 +214,7 @@ public class ProductController{
     @DeleteMapping
     public DeleteResponse deleteProducts(
         @RequestBody DeleteRequest request
+        // 여러 상품을 한 번에 삭제하기 위해서 Body로 받아야함
     ) {
         return service.deleteProducts(request);
     }
