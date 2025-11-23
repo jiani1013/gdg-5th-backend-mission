@@ -2,7 +2,11 @@ package gdg.hongik.mission.dto;
 
 import java.util.List;
 import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.Getter;
+import lombok.Setter;
 
+@Getter
+@Setter
 @Schema(
         description = "물품 구매 요청 전체",
         example = """
@@ -17,13 +21,4 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public class PurchaseOrderRequest {
     @Schema(description = "구매할 물품 목록")
     private List<PurchaseOrderItem> items;
-
-    public PurchaseOrderRequest(){}
-    public List<PurchaseOrderItem> getItems(){
-        return items;
-    }
-
-    public void setItems(List<PurchaseOrderItem> items){
-        this.items = items;
-    }
 }
